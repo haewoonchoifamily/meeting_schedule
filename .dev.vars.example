@@ -1,0 +1,5 @@
+SESSION_SECRET = "아무 긴 임의 문자열"
+ADVISOR_PASSWORD = "교수 로그인 비밀번호"
+# 구글 캘린더 연동을 로컬에서도 시험할 때만
+# GOOGLE_CLIENT_ID = ""
+# GOOGLE_CLIENT_SECRET = ""

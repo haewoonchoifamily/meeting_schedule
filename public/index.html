@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지도교수 면담신청</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <h1 id="title">지도교수 면담신청</h1>
+    <nav class="tabs" id="roletabs">
+      <button data-role="student" class="on">학생</button>
+      <button data-role="admin">지도교수</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ====================== 학생 ====================== -->
+  <section id="v-student" hidden>
+
+    <div id="student-login" class="card narrow" hidden>
+      <h2>학생 로그인</h2>
+      <p class="muted">이름과 학번을 입력하십시오.</p>
+      <label>이름<input id="s-name" autocomplete="name" placeholder="홍길동"></label>
+      <label>학번<input id="s-no" inputmode="numeric" autocomplete="off" placeholder="20231234"></label>
+      <button class="primary" id="s-login">로그인</button>
+      <p class="err" id="s-login-err" hidden></p>
+    </div>
+
+    <div id="student-main" hidden>
+      <div class="card">
+        <div class="cardhead">
+          <h2>면담 가능 시간</h2>
+          <div class="who">
+            <span id="s-who" class="muted"></span>
+            <button class="link" id="s-logout">로그아웃</button>
+          </div>
+        </div>
+        <div class="weeknav">
+          <button id="s-prev">◀ 지난 주</button>
+          <strong id="s-range"></strong>
+          <button id="s-next">다음 주 ▶</button>
+          <button class="link" id="s-this">이번 주</button>
+        </div>
+        <p class="muted small">초록 칸이 신청 가능한 시간입니다. 칸을 누르면 신청합니다.
+          같은 날에는 한 번만 신청할 수 있습니다.</p>
+        <div id="s-grid" class="grid"></div>
+        <div class="legend">
+          <span><i class="sw open"></i>신청 가능</span>
+          <span><i class="sw taken"></i>마감</span>
+          <span><i class="sw mine"></i>내 신청</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>내 신청 현황</h2>
+        <div id="s-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== 지도교수 ====================== -->
+  <section id="v-admin" hidden>
+
+    <div id="admin-login" class="card narrow" hidden>
+      <h2>지도교수 로그인</h2>
+      <label>비밀번호<input id="a-pw" type="password" autocomplete="current-password"></label>
+      <button class="primary" id="a-login">로그인</button>
+      <p class="err" id="a-login-err" hidden></p>
+    </div>
+
+    <div id="admin-main" hidden>
+      <div class="cardhead plain">
+        <nav class="tabs" id="admintabs">
+          <button data-tab="time" class="on">시간표</button>
+          <button data-tab="list">신청 목록 <span id="a-badge" class="badge" hidden></span></button>
+          <button data-tab="set">설정</button>
+        </nav>
+        <button class="link" id="a-logout">로그아웃</button>
+      </div>
+
+      <!-- 시간표 -->
+      <div class="card" id="t-time">
+        <div class="weeknav">
+          <button id="a-prev">◀ 지난 주</button>
+          <strong id="a-range"></strong>
+          <button id="a-next">다음 주 ▶</button>
+          <button class="link" id="a-this">이번 주</button>
+        </div>
+        <p class="muted small">칸을 눌러 면담 가능 시간을 켜고 끕니다. 끌어서 여러 칸을
+          한 번에 선택할 수 있습니다. 다 고르면 <b>저장</b>을 누르십시오.</p>
+        <div id="a-grid" class="grid admin"></div>
+        <div class="legend">
+          <span><i class="sw open"></i>열림</span>
+          <span><i class="sw pend"></i>신청 대기</span>
+          <span><i class="sw appr"></i>승인됨</span>
+          <span class="muted">신청이 걸린 칸은 지울 수 없습니다.</span>
+        </div>
+        <div class="actions">
+          <button class="primary" id="a-save">저장</button>
+          <button id="a-copy">지난 주 시간표 복사</button>
+          <button id="a-clear">이번 주 전부 끄기</button>
+          <span id="a-save-msg" class="muted"></span>
+        </div>
+      </div>
+
+      <!-- 신청 목록 -->
+      <div class="card" id="t-list" hidden>
+        <div class="cardhead">
+          <h2>신청 목록</h2>
+          <select id="a-filter">
+            <option value="pending">대기</option>
+            <option value="approved">승인</option>
+            <option value="rejected">거절</option>
+            <option value="all">전체</option>
+          </select>
+        </div>
+        <div id="a-list"></div>
+      </div>
+
+      <!-- 설정 -->
+      <div class="card" id="t-set" hidden>
+        <h2>구글 캘린더 연동</h2>
+        <div id="a-google"></div>
+
+        <h2>엑셀 내보내기</h2>
+        <p class="muted small">전체 신청 내역을 .xlsx 파일로 내려받습니다.</p>
+        <a class="btn" id="a-export" href="/api/admin/export.xlsx">엑셀로 내보내기</a>
+
+        <h2 class="danger-h">데이터 삭제</h2>
+        <p class="muted small">되돌릴 수 없습니다. 먼저 엑셀로 내보내 두십시오.</p>
+        <div class="actions">
+          <select id="a-purge-scope">
+            <option value="before">지난 기록 지우기 (아래 날짜 이전)</option>
+            <option value="bookings">신청 내역만 전부 삭제</option>
+            <option value="all">신청 + 시간표 전부 삭제</option>
+          </select>
+          <input type="date" id="a-purge-date">
+          <button class="danger" id="a-purge">삭제</button>
+        </div>
+        <p class="muted small" id="a-counts"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 신청 모달 -->
+<div id="modal" class="modal" hidden>
+  <div class="sheet">
+    <h2 id="m-title">면담 신청</h2>
+    <p id="m-when" class="muted"></p>
+    <label>면담 주제<textarea id="m-topic" rows="3" placeholder="예) 졸업요건 상담"></textarea></label>
+    <label>연락처 (선택)<input id="m-phone" placeholder="010-0000-0000"></label>
+    <p class="err" id="m-err" hidden></p>
+    <div class="actions right">
+      <button id="m-cancel">취소</button>
+      <button class="primary" id="m-ok">신청</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

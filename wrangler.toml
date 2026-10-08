@@ -1,0 +1,30 @@
+name = "advisor-meeting"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# 정적 화면(public/)은 Worker 가 같이 내보낸다. 빌드 단계가 없다.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# D1 데이터베이스. database_id 는 `wrangler d1 create advisor-meeting` 결과로 채운다.
+[[d1_databases]]
+binding = "DB"
+database_name = "advisor-meeting"
+database_id = "PUT-YOUR-DATABASE-ID-HERE"
+
+[vars]
+# 면담 시간표에 보여줄 범위와 칸 크기. 분 단위.
+DAY_START_MIN = "540"      # 09:00
+DAY_END_MIN   = "1080"     # 18:00
+SLOT_MIN      = "15"
+TIMEZONE      = "Asia/Seoul"
+SCHOOL_NAME   = "계명대학교"
+ADVISOR_NAME  = "지도교수"
+
+# 비밀값은 여기 두지 말고 `wrangler secret put` 으로 넣는다.
+#   ADVISOR_PASSWORD      교수 로그인 비밀번호
+#   SESSION_SECRET        세션 쿠키 서명 키 (아무 긴 임의 문자열)
+#   GOOGLE_CLIENT_ID      구글 캘린더 연동용 (선택)
+#   GOOGLE_CLIENT_SECRET  구글 캘린더 연동용 (선택)

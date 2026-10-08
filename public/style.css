@@ -1,0 +1,130 @@
+:root{
+  --bg:#f6f7f9; --card:#fff; --line:#dfe3e8; --fg:#1b2026; --dim:#6b7684;
+  --accent:#1f6feb; --accent-fg:#fff;
+  --open:#d7f0dd; --open-line:#4caf72;
+  --pend:#fdeec6; --pend-line:#d9a21b;
+  --appr:#cfe3ff; --appr-line:#2f6fd0;
+  --taken:#e7e9ec; --danger:#c0392b;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#13161a; --card:#1b1f25; --line:#2c333c; --fg:#e8edf4; --dim:#95a1b0;
+    --open:#1d3a28; --open-line:#3f8f62;
+    --pend:#413318; --pend-line:#c79a28;
+    --appr:#1b3356; --appr-line:#3b7ad4;
+    --taken:#262b32;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",
+  "Apple SD Gothic Neo",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+header{background:var(--card);border-bottom:1px solid var(--line);
+  position:sticky;top:0;z-index:5}
+.bar{display:flex;align-items:center;justify-content:space-between;height:58px}
+h1{font-size:18px;margin:0}
+h2{font-size:16px;margin:0 0 10px}
+h2.danger-h{color:var(--danger);margin-top:28px}
+main{padding:20px 0 60px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:18px;margin-bottom:18px}
+.card.narrow{max-width:400px;margin:40px auto}
+.cardhead{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.cardhead.plain{margin-bottom:14px}
+.who{display:flex;align-items:center;gap:10px}
+
+.muted{color:var(--dim)}
+.small{font-size:13px}
+.err{color:var(--danger);font-size:13px}
+
+label{display:block;margin:10px 0;font-size:13px;color:var(--dim)}
+input,select,textarea{display:block;width:100%;margin-top:4px;padding:9px 10px;
+  font:inherit;color:var(--fg);background:var(--bg);
+  border:1px solid var(--line);border-radius:8px}
+textarea{resize:vertical}
+select,input[type=date]{width:auto;min-width:160px}
+
+button,.btn{font:inherit;padding:9px 14px;border-radius:8px;cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--fg);
+  display:inline-block;text-decoration:none}
+button:hover,.btn:hover{border-color:var(--dim)}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);
+  color:var(--accent-fg)}
+button.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+button.link{border:0;background:none;color:var(--accent);padding:4px}
+button:disabled{opacity:.5;cursor:default}
+.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.actions.right{justify-content:flex-end}
+
+.tabs{display:flex;gap:4px}
+.tabs button{border:0;background:none;padding:8px 14px;border-radius:8px;color:var(--dim)}
+.tabs button.on{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.badge{background:var(--danger);color:#fff;border-radius:999px;
+  padding:1px 7px;font-size:12px;margin-left:4px}
+
+.weeknav{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.weeknav strong{min-width:210px;text-align:center}
+
+/* ---- 주간 격자 ---- */
+.grid{display:grid;grid-template-columns:64px repeat(5,1fr);gap:2px;
+  overflow-x:auto;user-select:none}
+.grid .hd{position:sticky;top:0;background:var(--card);text-align:center;
+  font-size:13px;font-weight:600;padding:6px 0;z-index:1}
+.grid .hd.today{color:var(--accent)}
+.grid .tm{font-size:11px;color:var(--dim);text-align:right;padding-right:6px;
+  line-height:20px;height:20px}
+.grid .cell{height:20px;border-radius:3px;background:var(--taken);opacity:.45}
+.grid .cell.on{opacity:1}
+.grid .cell.open{background:var(--open);box-shadow:inset 0 0 0 1px var(--open-line);
+  opacity:1;cursor:pointer}
+.grid .cell.pend{background:var(--pend);box-shadow:inset 0 0 0 1px var(--pend-line);opacity:1}
+.grid .cell.appr{background:var(--appr);box-shadow:inset 0 0 0 1px var(--appr-line);opacity:1}
+.grid .cell.mine{background:var(--appr);box-shadow:inset 0 0 0 2px var(--accent);opacity:1}
+.grid .cell.taken{background:var(--taken);opacity:.8;cursor:not-allowed}
+.grid.admin .cell{cursor:pointer}
+.grid .cell.past{opacity:.25;cursor:not-allowed}
+
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--dim);
+  margin-top:12px;align-items:center}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;
+  margin-right:5px;vertical-align:-2px}
+.sw.open{background:var(--open);box-shadow:inset 0 0 0 1px var(--open-line)}
+.sw.taken{background:var(--taken)}
+.sw.mine{background:var(--appr);box-shadow:inset 0 0 0 2px var(--accent)}
+.sw.pend{background:var(--pend);box-shadow:inset 0 0 0 1px var(--pend-line)}
+.sw.appr{background:var(--appr);box-shadow:inset 0 0 0 1px var(--appr-line)}
+
+/* ---- 목록 ---- */
+.row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;
+  padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.row:last-child{border-bottom:0}
+.row .info{flex:1;min-width:240px}
+.row .when{font-weight:600}
+.row .sub{font-size:13px;color:var(--dim);margin-top:2px}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;
+  border:1px solid var(--line)}
+.pill.pending{background:var(--pend);border-color:var(--pend-line)}
+.pill.approved{background:var(--appr);border-color:var(--appr-line)}
+.pill.rejected{background:var(--taken)}
+.empty{color:var(--dim);padding:18px 0;text-align:center}
+
+/* ---- 모달 ---- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;
+  align-items:center;justify-content:center;padding:16px;z-index:10}
+/* display 를 지정한 규칙은 hidden 속성(UA 의 display:none)을 이겨버린다.
+   그래서 숨김을 여기서 다시 못박아 준다. */
+.modal[hidden]{display:none}
+.sheet{background:var(--card);border-radius:12px;padding:20px;width:100%;
+  max-width:420px}
+
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
+  background:#222;color:#fff;padding:10px 18px;border-radius:999px;z-index:20;
+  font-size:14px;box-shadow:0 4px 18px rgba(0,0,0,.3)}
+
+@media (max-width:640px){
+  .grid{grid-template-columns:52px repeat(5,minmax(56px,1fr));font-size:12px}
+  .weeknav strong{min-width:0;flex:1}
+}
