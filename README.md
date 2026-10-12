@@ -90,27 +90,62 @@ npm run deploy
 승인할 때마다 교수 캘린더에 면담 일정이 자동으로 올라간다. 학생은 구글 계정이
 필요 없다.
 
-1. [Google Cloud Console](https://console.cloud.google.com) 에서 프로젝트를 만들고
-   **Google Calendar API** 를 사용 설정한다.
-2. *API 및 서비스 → 사용자 인증 정보 → OAuth 클라이언트 ID* 를 만든다.
-   - 유형: **웹 애플리케이션**
-   - 승인된 리디렉션 URI: `https://<배포주소>/api/admin/google/callback`
-     (정확한 값은 앱의 **설정** 탭에 표시된다)
-3. 받은 클라이언트 ID/비밀을 넣고 다시 배포한다.
+**서비스 계정 방식을 쓴다.** 사용자 동의 방식(OAuth)은 동의 화면을 거쳐야 하고,
+앱이 "테스트" 상태면 토큰이 7일 뒤 만료되어 일주일마다 다시 연결해야 한다.
+서비스 계정은 동의도 만료도 없다. 한 번 설정하면 계속 돈다.
 
-```bash
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-npm run deploy
+### 3-1. 서비스 계정 만들기
+
+[Google Cloud Console](https://console.cloud.google.com)
+
+1. 프로젝트를 만든다.
+2. *API 및 서비스 → 라이브러리* 에서 **Google Calendar API** 를 사용 설정한다.
+3. *API 및 서비스 → 사용자 인증 정보 → 사용자 인증 정보 만들기 → 서비스 계정*
+   - 이름은 아무거나 (예: `면담신청`)
+   - 역할은 지정하지 않아도 된다. 캘린더 권한은 아래 공유로 준다.
+4. 만들어진 서비스 계정 → *키* 탭 → **키 추가 → 새 키 만들기 → JSON**
+   JSON 파일이 내려받아진다. 이 파일에 비공개 키가 들어 있으니 잘 보관한다.
+
+JSON 안에서 두 값을 쓴다.
+
+```
+client_email   ...@...iam.gserviceaccount.com   -> GOOGLE_SA_EMAIL
+private_key    -----BEGIN PRIVATE KEY-----...   -> GOOGLE_SA_PRIVATE_KEY
 ```
 
-4. 앱 → **지도교수 → 설정 → 구글 계정 연결** 을 누르고 동의하면 끝이다.
+### 3-2. 캘린더를 서비스 계정에 공유
 
-앱이 테스트 모드인 동안에는 OAuth 동의 화면의 *테스트 사용자* 에 교수 본인
-계정을 넣어 두어야 한다. 캘린더 등록이 실패해도 **승인 자체는 그대로 처리되고**
-실패 이유를 알려준다.
+서비스 계정은 자기 캘린더만 가지고 있다. 교수 캘린더에 쓰려면 공유해야 한다.
 
----
+[Google 캘린더](https://calendar.google.com) → 왼쪽에서 본인 캘린더 → *설정과 공유*
+→ **특정 사용자와 공유** → 서비스 계정 이메일(`...iam.gserviceaccount.com`)을 추가
+→ 권한을 **변경 권한**(일정 변경) 으로 준다.
+
+이 단계를 빠뜨리면 승인할 때 404 가 나고, 앱이 "캘린더를 찾을 수 없습니다 —
+공유했는지 확인하십시오" 라고 알려준다.
+
+### 3-3. 값 세 개 넣기
+
+```bash
+npx wrangler secret put GOOGLE_SA_EMAIL        # client_email
+npx wrangler secret put GOOGLE_CALENDAR_ID     # 교수 Gmail 주소
+```
+
+비공개 키는 여러 줄이라 손으로 붙여넣기 번거롭다. JSON 에서 바로 꺼내 넣는다.
+
+```bash
+node -e "console.log(require('./키파일.json').private_key)" | npx wrangler secret put GOOGLE_SA_PRIVATE_KEY
+```
+
+secret 은 **즉시 반영된다. 재배포가 필요 없다.**
+
+### 3-4. 확인
+
+앱 → *지도교수 → 설정* 에 `설정됨 — 캘린더 ...` 이 뜨면 된다.
+**연결 시험** 을 누르면 일정을 하나 만들었다가 바로 지워서 설정이 맞는지 확인한다.
+
+캘린더 등록이 실패해도 **승인 자체는 그대로 처리되고** 실패 이유를 알려준다.
+면담 일정이 캘린더에 없다고 해서 승인이 날아가지는 않는다.
 
 ## 쓰는 법
 

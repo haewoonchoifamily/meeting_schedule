@@ -64,6 +64,7 @@ function gridSkeleton(el, days, extraClass = "") {
     const h = cellEl("hd", `${DOW[i]}\n${md(d)}`);
     h.style.whiteSpace = "pre-line";
     if (d === CFG.today) h.classList.add("today");
+    else if (d < CFG.today) h.classList.add("pastday");
     el.append(h);
   });
   for (const m of times()) {
@@ -201,6 +202,9 @@ function paintAdmin() {
     const key = c.dataset.key;
     const b = booked.get(key);
     c.className = "cell";
+    // 지난 날짜는 학생 화면에서 잠겨 보이지 않는다. 교수 화면에서도 그게
+    // 드러나야 "분명히 열었는데 학생한테 안 보인다" 는 일이 안 생긴다.
+    if (c.dataset.date < CFG.today) c.classList.add("past");
     if (b) {
       c.classList.add(b.status === "approved" ? "appr"
         : b.status === "pending" ? "pend" : "open");
@@ -252,6 +256,12 @@ async function saveWeek() {
     const r = await api("/api/admin/week",
       { method: "PUT", body: { monday: aMonday, slots } });
     $("#a-save-msg").textContent = `저장했습니다 (${r.changed}칸 변경)`;
+    const past = slots.filter((s) => s.date < CFG.today).length;
+    if (past) {
+      alert(`저장은 됐지만, 지정하신 ${past}칸이 지난 날짜입니다.\n` +
+            "지나간 시간은 학생 화면에 회색으로 잠겨 보이고 신청할 수 없습니다.\n\n" +
+            "'다음 주 ▶' 로 넘겨서 앞으로의 날짜에 지정하십시오.");
+    }
     if (r.blocked && r.blocked.length) {
       alert("신청이 걸려 있어 지우지 못한 칸이 있습니다:\n\n" + r.blocked.join("\n") +
             "\n\n먼저 신청 목록에서 처리하십시오.");
@@ -339,27 +349,40 @@ async function loadAdminStatus() {
   const el = $("#a-google");
   const g = s.google;
   if (!g.configured) {
+    // 서비스 계정 방식이라 동의 절차가 없다. 값 세 개만 넣으면 끝난다.
     el.innerHTML =
-      `<p class="muted small">구글 연동이 설정돼 있지 않습니다. 배포 후 아래를 실행하십시오.</p>
-       <pre class="muted small">wrangler secret put GOOGLE_CLIENT_ID
-wrangler secret put GOOGLE_CLIENT_SECRET</pre>
-       <p class="muted small">구글 클라우드 콘솔의 승인된 리디렉션 URI:<br>
-       <code>${esc(g.redirectUri)}</code></p>`;
-  } else if (g.linked) {
-    el.innerHTML =
-      `<p>연결됨 ${g.account ? `— <b>${esc(g.account)}</b>` : ""}</p>
-       <p class="muted small">승인할 때마다 이 계정의 캘린더에 면담 일정이 올라갑니다.</p>`;
-    const b = document.createElement("button");
-    b.textContent = "연결 끊기";
-    b.onclick = async () => {
-      if (!confirm("구글 캘린더 연결을 끊을까요?")) return;
-      await api("/api/admin/google/unlink", { method: "POST" });
-      loadAdminStatus();
-    };
-    el.append(b);
+      `<p class="muted small">아직 설정되지 않았습니다. 서비스 계정 키를 받아
+       아래 세 값을 넣으십시오. (자세한 절차는 README 참고)</p>
+       <pre class="muted small">wrangler secret put GOOGLE_SA_EMAIL
+wrangler secret put GOOGLE_SA_PRIVATE_KEY
+wrangler secret put GOOGLE_CALENDAR_ID</pre>
+       <p class="muted small">그리고 교수님 캘린더를 서비스 계정 이메일에
+       <b>변경 권한</b>으로 공유해야 합니다.</p>`;
   } else {
-    el.innerHTML = `<p class="muted small">아직 연결되지 않았습니다.</p>
-      <a class="btn primary" href="/api/admin/google/start">구글 계정 연결</a>`;
+    el.innerHTML =
+      `<p>설정됨 — 캘린더 <b>${esc(g.calendarId)}</b></p>
+       <p class="muted small">서비스 계정: <code>${esc(g.serviceAccount || "")}</code></p>
+       <p class="muted small">승인할 때마다 이 캘린더에 면담 일정이 올라갑니다.
+       사용자 동의나 토큰 만료가 없습니다.</p>`;
+    const b = document.createElement("button");
+    b.textContent = "연결 시험";
+    const msg = document.createElement("span");
+    msg.className = "muted small";
+    msg.style.marginLeft = "10px";
+    b.onclick = async () => {
+      b.disabled = true;
+      msg.textContent = "시험 중…";
+      try {
+        await api("/api/admin/google/test", { method: "POST" });
+        msg.textContent = "정상입니다. 일정을 만들고 바로 지웠습니다.";
+      } catch (e) {
+        msg.textContent = "";
+        alert("연결 시험 실패:\n\n" + e.message);
+      } finally {
+        b.disabled = false;
+      }
+    };
+    el.append(b, msg);
   }
   $("#a-counts").textContent =
     `시간표 ${s.counts.slots}칸 · 신청 ${s.counts.bookings}건 · 대기 ${s.counts.pending}건`;

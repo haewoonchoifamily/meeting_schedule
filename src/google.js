@@ -1,114 +1,114 @@
-// 구글 캘린더 연동 — 승인한 면담을 교수 캘린더에 자동으로 올린다.
+// 구글 캘린더 연동 — 서비스 계정 방식.
 //
-// 교수가 한 번 구글 로그인에 동의하면 refresh token 을 받아 D1 에 넣어 두고,
-// 그 뒤로는 그걸로 access token 을 새로 발급받아 쓴다. 학생은 구글 계정이 필요 없다.
+// 승인한 면담을 교수 캘린더에 자동으로 올린다. 학생은 구글 계정이 필요 없다.
 //
-// 필요한 것 (없으면 연동 기능만 꺼지고 나머지는 그대로 돈다)
-//   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET   secret 으로 넣는다
-//   구글 클라우드 콘솔의 승인된 리디렉션 URI 에 아래를 등록
-//      https://<배포주소>/api/admin/google/callback
+// 왜 서비스 계정인가
+//   OAuth 사용자 동의 방식은 동의 화면을 거쳐야 하고, 앱이 "테스트" 상태면
+//   refresh token 이 7일 뒤 만료되어 일주일마다 다시 연결해야 한다. 서비스
+//   계정은 동의 화면도 만료도 없다. 한 번 설정하면 계속 돈다.
+//
+// 어떻게 도는가
+//   비공개 키로 JWT 를 만들어 구글에 주면 access token 을 돌려준다(1시간짜리).
+//   그 토큰으로 캘린더 API 를 부른다. 서비스 계정 자신의 캘린더가 아니라
+//   교수 캘린더에 쓰므로, 교수가 그 캘린더를 서비스 계정 이메일에 공유해
+//   두어야 한다(권한: 변경 권한).
+//
+// 필요한 값 (없으면 연동만 꺼지고 나머지는 그대로 돈다)
+//   GOOGLE_SA_EMAIL        서비스 계정 이메일 (...iam.gserviceaccount.com)
+//   GOOGLE_SA_PRIVATE_KEY  키 JSON 의 private_key (PEM)
+//   GOOGLE_CALENDAR_ID     일정을 넣을 캘린더 = 보통 교수 Gmail 주소
 
-const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const CAL_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const JWT_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
-const RT_KEY = "google_refresh_token";
-const EMAIL_KEY = "google_account";
+const enc = new TextEncoder();
+
+const b64url = (buf) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
 export const isConfigured = (env) =>
-  Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+  Boolean(env.GOOGLE_SA_EMAIL && env.GOOGLE_SA_PRIVATE_KEY && env.GOOGLE_CALENDAR_ID);
 
-export async function getSetting(env, key) {
-  const row = await env.DB.prepare("SELECT value FROM settings WHERE key = ?")
-    .bind(key).first();
-  return row ? row.value : null;
+/** 설정이 다 됐으면 바로 쓸 수 있다. 서비스 계정은 따로 "연결" 단계가 없다. */
+export const isLinked = async (env) => isConfigured(env);
+export const linkedAccount = async (env) => env.GOOGLE_CALENDAR_ID || null;
+export const serviceAccount = (env) => env.GOOGLE_SA_EMAIL || null;
+
+function eventsUrl(env, suffix = "") {
+  return "https://www.googleapis.com/calendar/v3/calendars/" +
+         `${encodeURIComponent(env.GOOGLE_CALENDAR_ID)}/events${suffix}`;
 }
 
-export async function putSetting(env, key, value) {
-  await env.DB.prepare(
-    "INSERT INTO settings (key, value) VALUES (?, ?) " +
-    "ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(key, value).run();
-}
-
-export async function delSetting(env, key) {
-  await env.DB.prepare("DELETE FROM settings WHERE key = ?").bind(key).run();
-}
-
-export const isLinked = async (env) => Boolean(await getSetting(env, RT_KEY));
-export const linkedAccount = (env) => getSetting(env, EMAIL_KEY);
-
-export function redirectUri(url) {
-  return `${new URL(url).origin}/api/admin/google/callback`;
-}
-
-export function authUrl(env, url, state) {
-  const p = new URLSearchParams({
-    client_id: env.GOOGLE_CLIENT_ID,
-    redirect_uri: redirectUri(url),
-    response_type: "code",
-    scope: SCOPE,
-    access_type: "offline",      // refresh token 을 받으려면 필요
-    prompt: "consent",           // 이미 동의했어도 refresh token 을 다시 준다
-    include_granted_scopes: "true",
-    state,
-  });
-  return `${AUTH_URL}?${p}`;
-}
-
-/** 동의 후 받은 code 를 refresh token 으로 바꿔 저장한다. */
-export async function exchangeCode(env, url, code) {
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: redirectUri(url),
-      grant_type: "authorization_code",
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok || !data.refresh_token) {
-    throw new Error(data.error_description || data.error ||
-                    "refresh token 을 받지 못했습니다");
-  }
-  await putSetting(env, RT_KEY, data.refresh_token);
-  // 어떤 계정에 붙었는지 화면에 보여주려고 id_token 에서 이메일만 꺼낸다.
+/**
+ * PEM 을 WebCrypto 가 받는 DER 로.
+ *
+ * secret 에 넣는 경로에 따라 줄바꿈이 "\n" 두 글자로 들어오기도 하고 진짜
+ * 줄바꿈으로 들어오기도 한다. 둘 다 받아준다.
+ */
+function pemToDer(pem) {
+  const text = String(pem).replace(/\\n/g, "\n").replace(/^["']|["']$/g, "");
+  const body = text.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  if (!body) throw new Error("비공개 키가 비어 있습니다.");
+  let bin;
   try {
-    const claims = JSON.parse(atob(data.id_token.split(".")[1]
-      .replace(/-/g, "+").replace(/_/g, "/")));
-    if (claims.email) await putSetting(env, EMAIL_KEY, claims.email);
-  } catch { /* 없으면 없는 대로 */ }
+    bin = atob(body);
+  } catch {
+    throw new Error("비공개 키를 읽을 수 없습니다. PEM 전체를 넣었는지 확인하십시오.");
+  }
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
-export async function unlink(env) {
-  await delSetting(env, RT_KEY);
-  await delSetting(env, EMAIL_KEY);
-}
+// access token 은 1시간짜리다. 같은 isolate 안에서는 재사용한다.
+let cached = { token: null, exp: 0, key: null };
 
 async function accessToken(env) {
-  const refresh = await getSetting(env, RT_KEY);
-  if (!refresh) throw new Error("구글 계정이 연결돼 있지 않습니다");
+  if (!isConfigured(env)) {
+    throw new Error("구글 캘린더 설정이 끝나지 않았습니다 " +
+                    "(GOOGLE_SA_EMAIL / GOOGLE_SA_PRIVATE_KEY / GOOGLE_CALENDAR_ID).");
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (cached.token && cached.exp - 60 > now && cached.key === env.GOOGLE_SA_EMAIL) {
+    return cached.token;
+  }
+
+  let key;
+  try {
+    key = await crypto.subtle.importKey(
+      "pkcs8", pemToDer(env.GOOGLE_SA_PRIVATE_KEY),
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  } catch (e) {
+    throw new Error("비공개 키가 올바르지 않습니다: " + (e.message || e));
+  }
+
+  const head = b64url(enc.encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
+  const body = b64url(enc.encode(JSON.stringify({
+    iss: env.GOOGLE_SA_EMAIL,
+    scope: SCOPE,
+    aud: TOKEN_URL,
+    iat: now,
+    exp: now + 3600,
+  })));
+  const sig = b64url(await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", key, enc.encode(`${head}.${body}`)));
+
   const res = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      refresh_token: refresh,
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      grant_type: "refresh_token",
-    }),
+    body: new URLSearchParams({ grant_type: JWT_GRANT, assertion: `${head}.${body}.${sig}` }),
   });
   const data = await res.json();
   if (!res.ok || !data.access_token) {
-    // 교수가 구글에서 권한을 끊으면 여기로 온다. 끊긴 토큰은 버린다.
-    if (data.error === "invalid_grant") await unlink(env);
-    throw new Error(data.error_description || data.error || "토큰 갱신 실패");
+    throw new Error(data.error_description || data.error || "토큰 발급 실패");
   }
-  return data.access_token;
+  cached = { token: data.access_token, exp: now + (data.expires_in || 3600),
+             key: env.GOOGLE_SA_EMAIL };
+  return cached.token;
 }
+
+const hhmmss = (m) =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}:00`;
 
 /**
  * 승인한 면담을 캘린더에 올린다. 만든 일정의 id 를 돌려준다.
@@ -116,8 +116,6 @@ async function accessToken(env) {
  */
 export async function createEvent(env, { date, startMin, endMin, name, studentNo,
                                          topic, phone }) {
-  const hhmm = (m) =>
-    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}:00`;
   const body = {
     summary: `면담 — ${name} (${studentNo})`,
     description: [
@@ -125,31 +123,54 @@ export async function createEvent(env, { date, startMin, endMin, name, studentNo
       phone ? `연락처: ${phone}` : null,
       "지도교수 면담신청 시스템에서 자동 등록",
     ].filter(Boolean).join("\n"),
-    start: { dateTime: `${date}T${hhmm(startMin)}+09:00`, timeZone: "Asia/Seoul" },
-    end: { dateTime: `${date}T${hhmm(endMin)}+09:00`, timeZone: "Asia/Seoul" },
+    start: { dateTime: `${date}T${hhmmss(startMin)}+09:00`, timeZone: "Asia/Seoul" },
+    end: { dateTime: `${date}T${hhmmss(endMin)}+09:00`, timeZone: "Asia/Seoul" },
   };
-  const res = await fetch(CAL_URL, {
+  const res = await fetch(eventsUrl(env), {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${await accessToken(env)}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${await accessToken(env)}`,
+               "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.error?.message || "캘린더 등록 실패");
+    throw new Error(explain(res.status, data));
   }
   return data.id;
 }
 
-/** 승인을 취소하거나 신청을 지울 때 캘린더에서도 치운다. 실패해도 조용히 넘긴다. */
+/** 승인을 취소하거나 신청을 지울 때 캘린더에서도 치운다. 실패해도 넘어간다. */
 export async function deleteEvent(env, eventId) {
-  if (!eventId) return;
+  if (!eventId || !isConfigured(env)) return;
   try {
-    await fetch(`${CAL_URL}/${encodeURIComponent(eventId)}`, {
+    await fetch(eventsUrl(env, `/${encodeURIComponent(eventId)}`), {
       method: "DELETE",
       headers: { Authorization: `Bearer ${await accessToken(env)}` },
     });
   } catch { /* 캘린더가 안 지워져도 신청 처리는 계속한다 */ }
+}
+
+/** 설정이 맞는지 확인 — 일정을 하나 만들고 바로 지운다. */
+export async function selfTest(env) {
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const id = await createEvent(env, {
+    date: today, startMin: 0, endMin: 15,
+    name: "연결 시험", studentNo: "-", topic: "이 일정은 바로 삭제됩니다",
+  });
+  await deleteEvent(env, id);
+  return { calendar: env.GOOGLE_CALENDAR_ID, account: env.GOOGLE_SA_EMAIL };
+}
+
+/** 구글이 주는 오류를 무엇을 고쳐야 하는지로 바꿔 준다. */
+function explain(status, data) {
+  const msg = data?.error?.message || data?.error_description || `HTTP ${status}`;
+  if (status === 404) {
+    return `${msg} — 캘린더를 찾을 수 없습니다. GOOGLE_CALENDAR_ID 가 맞는지, ` +
+           "그 캘린더를 서비스 계정 이메일에 공유했는지 확인하십시오.";
+  }
+  if (status === 403) {
+    return `${msg} — 권한이 없습니다. 캘린더 공유 설정에서 서비스 계정에 ` +
+           '"변경 권한"을 주었는지, Calendar API 를 사용 설정했는지 확인하십시오.';
+  }
+  return msg;
 }

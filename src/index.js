@@ -258,9 +258,8 @@ async function handleApi(req, env, url) {
     return json({
       google: {
         configured: g.isConfigured(env),
-        linked: await g.isLinked(env),
-        account: await g.linkedAccount(env),
-        redirectUri: g.redirectUri(url),
+        calendarId: await g.linkedAccount(env),
+        serviceAccount: g.serviceAccount(env),
       },
       counts: await env.DB.prepare(
         `SELECT
@@ -480,31 +479,20 @@ async function handleApi(req, env, url) {
     });
   }
 
-  // ---- 구글 캘린더 ----
-  if (path === "/api/admin/google/start" && method === "GET") {
+  // ---- 구글 캘린더 (서비스 계정) ----
+  // 동의 절차가 없으므로 연결/해제 대신 "설정이 맞는지 확인" 만 있으면 된다.
+  if (path === "/api/admin/google/test" && method === "POST") {
     await needAdmin(req, env);
     if (!g.isConfigured(env)) {
       throw new HttpError(400,
-        "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET 이 설정되지 않았습니다.");
+        "GOOGLE_SA_EMAIL / GOOGLE_SA_PRIVATE_KEY / GOOGLE_CALENDAR_ID 가 " +
+        "설정되지 않았습니다.");
     }
-    const state = await sign(secretOf(env), { g: 1, exp: Date.now() + 10 * 60 * 1000 });
-    return Response.redirect(g.authUrl(env, url, state), 302);
-  }
-
-  if (path === "/api/admin/google/callback" && method === "GET") {
-    await needAdmin(req, env);
-    const state = await verify(secretOf(env), url.searchParams.get("state"));
-    if (!state || !state.g) throw new HttpError(400, "요청이 만료됐습니다. 다시 시도하십시오.");
-    const code = url.searchParams.get("code");
-    if (!code) throw new HttpError(400, url.searchParams.get("error") || "동의가 취소됐습니다.");
-    await g.exchangeCode(env, url, code);
-    return Response.redirect(`${url.origin}/#admin/settings`, 302);
-  }
-
-  if (path === "/api/admin/google/unlink" && method === "POST") {
-    await needAdmin(req, env);
-    await g.unlink(env);
-    return json({ ok: true });
+    try {
+      return json({ ok: true, ...(await g.selfTest(env)) });
+    } catch (e) {                                 // noqa
+      throw new HttpError(400, String(e.message || e));
+    }
   }
 
   return fail(404, "없는 API 입니다.");

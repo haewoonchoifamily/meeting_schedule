@@ -12,7 +12,7 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "DB"
 database_name = "advisor-meeting"
-database_id = "PUT-YOUR-DATABASE-ID-HERE"
+database_id = "2aed7ee6-ce9f-4052-941a-06dd09b4a9a6"
 
 [vars]
 # 면담 시간표에 보여줄 범위와 칸 크기. 분 단위.
@@ -26,5 +26,6 @@ ADVISOR_NAME  = "지도교수"
 # 비밀값은 여기 두지 말고 `wrangler secret put` 으로 넣는다.
 #   ADVISOR_PASSWORD      교수 로그인 비밀번호
 #   SESSION_SECRET        세션 쿠키 서명 키 (아무 긴 임의 문자열)
-#   GOOGLE_CLIENT_ID      구글 캘린더 연동용 (선택)
-#   GOOGLE_CLIENT_SECRET  구글 캘린더 연동용 (선택)
+#   GOOGLE_SA_EMAIL       구글 캘린더 연동용 서비스 계정 (선택)
+#   GOOGLE_SA_PRIVATE_KEY 〃 비공개 키 (PEM)
+#   GOOGLE_CALENDAR_ID    〃 일정을 넣을 캘린더 = 보통 교수 Gmail 주소
